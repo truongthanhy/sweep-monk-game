@@ -24,9 +24,18 @@
     #chatInput { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid #78350f; border-radius: 8px; color: #fff; padding: 6px 10px; font-size: 13px; outline: none; }
     #chatInput:focus { border-color: #facc15; }
     .chat-msg-user { color: #f97316; font-weight: bold; margin-right: 5px; }
+
+    /* Nút bật/tắt nhạc thiền */
+    .music-btn { background: rgba(0, 0, 0, 0.6); border: 2px solid rgba(253, 224, 71, 0.6); color: #facc15; padding: 4px 10px; border-radius: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
+    .music-btn:hover { background: rgba(120, 53, 15, 0.8); }
   </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-2 text-amber-100">
+
+  <!-- Audio nhạc thiền (Stream nhạc sáo trúc / thiền định không bản quyền) -->
+  <audio id="zenAudio" loop>
+    <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf756.mp3?filename=meditation-flute-and-water-110294.mp3" type="audio/mpeg">
+  </audio>
 
   <!-- Modal Đăng Nhập -->
   <div id="joinModal" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
@@ -53,6 +62,12 @@
       <div class="flex items-center space-x-6">
         <span class="text-yellow-400 text-base">✨ Phước Đức: <span id="uiMerit">0</span></span>
         <span class="text-amber-200">🧹 Đã Quét: <span id="uiSweeps">0</span> lá</span>
+      </div>
+      <!-- Nút điều khiển nhạc thiền -->
+      <div>
+        <button id="musicToggleBtn" onclick="toggleMusic()" class="music-btn">
+          🔇 <span id="musicText">Bật Nhạc Thiền</span>
+        </button>
       </div>
     </div>
 
@@ -92,9 +107,31 @@
     let players = {};
     let myLeaves = [];
     let chatPanelVisible = false;
+    let isMusicPlaying = false;
 
     const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
     let joystickDir = { x: 0, y: 0 };
+
+    // Xử lý bật/tắt nhạc thiền
+    function toggleMusic() {
+      const audio = document.getElementById('zenAudio');
+      const btnText = document.getElementById('musicText');
+      const btn = document.getElementById('musicToggleBtn');
+
+      if (isMusicPlaying) {
+        audio.pause();
+        isMusicPlaying = false;
+        btnText.innerText = 'Bật Nhạc Thiền';
+        btn.innerHTML = '🔇 <span id="musicText">Bật Nhạc Thiền</span>';
+      } else {
+        audio.play().then(() => {
+          isMusicPlaying = true;
+          btn.innerHTML = '🎵 <span id="musicText">Tắt Nhạc Thiền</span>';
+        }).catch(err => {
+          console.log("Trình duyệt chặn autoplay audio:", err);
+        });
+      }
+    }
 
     function startGame() {
       const nameInput = document.getElementById('playerName');
@@ -103,6 +140,14 @@
       // Ẩn modal đăng nhập ngay lập tức tránh bị kẹt
       const modal = document.getElementById('joinModal');
       if (modal) modal.classList.add('hidden');
+
+      // Tự động bật nhạc thiền khi vào game (nếu trình duyệt cho phép)
+      const audio = document.getElementById('zenAudio');
+      audio.play().then(() => {
+        isMusicPlaying = true;
+        const btn = document.getElementById('musicToggleBtn');
+        if(btn) btn.innerHTML = '🎵 <span id="musicText">Tắt Nhạc Thiền</span>';
+      }).catch(e => {});
 
       socket.emit('joinGame', { name: name });
       if ('ontouchstart' in window || navigator.maxTouchPoints > 0) setupJoystick();
@@ -179,7 +224,6 @@
       if (keys.hasOwnProperty(e.key)) keys[e.key] = true; 
     });
     window.addEventListener('keyup', e => { 
-      if (keys.hasOwnProperty(e.key)) keys.key = false; // Note: safe keyup
       if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
     });
 

@@ -99,10 +99,22 @@
     let joystickDir = { x: 0, y: 0 };
 
     function startGame() {
-      const name = document.getElementById('playerName').value.trim() || 'Chú Tiểu';
-      document.getElementById('joinModal').classList.add('hidden');
+      const nameInput = document.getElementById('playerName');
+      const name = nameInput ? nameInput.value.trim() : 'Chú Tiểu';
+      
+      // Ẩn modal đăng nhập ngay lập tức để tránh bị kẹt màn hình
+      const modal = document.getElementById('joinModal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+
+      // Gửi yêu cầu vào game lên server
       socket.emit('joinGame', { name: name });
-      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) setupJoystick();
+
+      // Kích hoạt joystick nếu chơi trên điện thoại
+      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        setupJoystick();
+      }
     }
 
     // Xử lý bật tắt Chat

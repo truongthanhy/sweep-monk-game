@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chú Tiểu Quét Lá Đa - Multiplayer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { touch-action: manipulation; user-select: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    canvas { display: block; background-color: #7ec850; }
+    .joystick-base { width: 120px; height: 120px; background: rgba(0, 0, 0, 0.2); border: 2px solid rgba(255, 255, 255, 0.4); border-radius: 50%; position: absolute; bottom: 20px; left: 20px; touch-action: none; display: none; }
+    .joystick-thumb { width: 50px; height: 50px; background: rgba(255, 255, 255, 0.8); border-radius: 50%; position: absolute; top: 35px; left: 35px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body class="bg-amber-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-2">
+
+  <!-- Màn hình Đăng nhập / Chọn Vai -->
+  <div id="joinModal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="bg-amber-900 border-2 border-amber-500 rounded-2xl p-6 max-w-md w-full shadow-2xl text-center">
+      <h1 class="text-3xl font-extrabold text-amber-200 mb-2">Chú Tiểu Quét Lá Đa 🧹</h1>
+      <p class="text-amber-100 text-sm mb-6">Tích phước cúng chùa • Quy tụ Phật tử online</p>
+      
+      <div class="space-y-4 text-left">
+        <div>
+          <label class="block text-xs uppercase tracking-wider font-bold text-amber-300 mb-1">Pháp Danh / Tên Người Chơi:</label>
+          <input type="text" id="playerName" value="Chú Tiểu Tâm An" class="w-full bg-amber-950 border border-amber-600 rounded-lg px-4 py-2 text-amber-100 focus:outline-none focus:border-amber-400">
+        </div>
+
+        <div>
+          <label class="block text-xs uppercase tracking-wider font-bold text-amber-300 mb-1">Chọn Vai Trò:</label>
+          <div class="grid grid-cols-2 gap-3">
+            <button type="button" id="btnRoleMonk" onclick="selectRole('monk')" class="p-3 border-2 border-amber-400 bg-amber-800 rounded-xl text-center font-bold text-amber-100 shadow-md">
+              👶 Chú Tiểu<br><span class="text-xs font-normal text-amber-300">Quét lá tích phước</span>
+            </button>
+            <button type="button" id="btnRoleAbbot" onclick="selectRole('abbot')" class="p-3 border-2 border-transparent bg-amber-950 rounded-xl text-center font-bold text-amber-400 opacity-70 hover:opacity-100">
+              🧙‍♂️ Sư Trụ Trì<br><span class="text-xs font-normal text-amber-300">Ban phước tăng điểm</span>
+            </button>
+          </div>
+        </div>
+
+        <button onclick="startGame()" class="w-full bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-amber-950 font-black text-lg py-3 rounded-xl shadow-lg transform active:scale-95 transition">
+          VÀO SÂN CHÙA 🔔
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UI Game Màn hình chính -->
+  <div class="relative w-full max-w-5xl bg-amber-900 rounded-2xl overflow-hidden border-4 border-amber-700 shadow-2xl">
+    <!-- Header thông số -->
+    <div class="bg-amber-950/80 px-4 py-2 flex items-center justify-between text-sm font-bold border-b border-amber-700">
+      <div class="flex items-center space-x-4">
+        <span class="text-yellow-400 text-base">✨ Phước Đức: <span id="uiMerit">0</span></span>
+        <span class="text-amber-200">🧹 Đã Quét: <span id="uiSweeps">0</span> lá</span>
+      </div>
+      <div id="blessingBanner" class="hidden animate-pulse text-amber-300 font-extrabold bg-amber-800/80 px-3 py-1 rounded-full border border-yellow-400 text-xs">
+        🌟 SƯ TRỤ TRÌ ĐANG BAN PHƯỚC (X2 ĐIỂM)!
+      </div>
+      <div id="abbotControls" class="hidden">
+        <button onclick="castBlessing()" class="bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 text-amber-950 font-black px-4 py-1 rounded-lg shadow text-xs">
+          ✋ BAN PHƯỚC DIỆN RỘNG
+        </button>
+      </div>
+    </div>
+
+    <!-- Canvas Game -->
+    <canvas id="gameCanvas" width="1200" height="700" class="w-full h-auto cursor-crosshair"></canvas>
+
+    <!-- Virtual Joystick cho Điện thoại -->
+    <div id="joystickBase" class="joystick-base">
+      <div id="joystickThumb" class="joystick-thumb"></div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let selectedRole = 'monk';
+    let myId = null;
+    let players = {};
+    let leaves = [];
+    let blessingActive = false;
+
+    // Phím điều khiển
+    const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+    let joystickDir = { x: 0, y: 0 };
+
+    function selectRole(role) {
+      selectedRole = role;
+      document.getElementById('btnRoleMonk').className = role === 'monk' ? 'p-3 border-2 border-amber-400 bg-amber-800 rounded-xl text-center font-bold text-amber-100 shadow-md' : 'p-3 border-2 border-transparent bg-amber-950 rounded-xl text-center font-bold text-amber-400 opacity-70';
+      document.getElementById('btnRoleAbbot').className = role === 'abbot' ? 'p-3 border-2 border-amber-400 bg-amber-800 rounded-xl text-center font-bold text-amber-100 shadow-md' : 'p-3 border-2 border-transparent bg-amber-950 rounded-xl text-center font-bold text-amber-400 opacity-70';
+    }
+
+    function startGame() {
+      const name = document.getElementById('playerName').value.trim() || 'Chú Tiểu';
+      document.getElementById('joinModal').classList.add('hidden');
+      socket.emit('joinGame', { name: name, role: selectedRole });
+
+      // Phát hiện thiết bị di động để hiển thị Joystick
+      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        setupJoystick();
+      }
+    }
+
+    function castBlessing() {
+      socket.emit('castBlessing');
+    }
+
+    // Socket Events Listeners
+    socket.on('initGameState', (data) => {
+      myId = data.playerId;
+      players = data.players;
+      leaves = data.leaves;
+      blessingActive = data.blessingActive;
+
+      if (players[myId] && players[myId].role === 'abbot') {
+        document.getElementById('abbotControls').classList.remove('hidden');
+      }
+    });
+
+    socket.on('playerJoined', (p) => { players[p.id] = p; });
+    socket.on('playerMoved', (data) => {
+      if (players[data.id]) {
+        Object.assign(players[data.id], data);
+      }
+    });
+    socket.on('playerLeft', (id) => { delete players[id]; });
+    
+    socket.on('leafSpawned', (leaf) => { leaves.push(leaf); });
+    socket.on('leafSwept', (data) => {
+      leaves = leaves.filter(l => l.id !== data.leafId);
+      if (players[data.playerId]) {
+        players[data.playerId].merit = data.totalMerit;
+        if (data.playerId === myId) {
+          document.getElementById('uiMerit').innerText = data.totalMerit;
+          document.getElementById('uiSweeps').innerText = players[myId].sweeps + 1;
+          players[myId].sweeps += 1;
+        }
+      }
+    });
+
+    socket.on('blessingStarted', (data) => {
+      blessingActive = true;
+      leaves = data.leaves;
+      document.getElementById('blessingBanner').classList.remove('hidden');
+    });
+
+    socket.on('blessingEnded', () => {
+      blessingActive = false;
+      document.getElementById('blessingBanner').classList.add('hidden');
+    });
+
+    // Keyboard Input Listener
+    window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+    window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+
+    // Game Loop
+    function update() {
+      if (!myId || !players[myId]) return;
+
+      const me = players[myId];
+      let speed = me.role === 'abbot' ? 3 : 5;
+      let dx = 0, dy = 0;
+
+      if (keys.w || keys.ArrowUp) dy -= 1;
+      if (keys.s || keys.ArrowDown) dy += 1;
+      if (keys.a || keys.ArrowLeft) dx -= 1;
+      if (keys.d || keys.ArrowRight) dx += 1;
+
+      if (joystickDir.x !== 0 || joystickDir.y !== 0) {
+        dx = joystickDir.x;
+        dy = joystickDir.y;
+      }
+
+      if (dx !== 0 || dy !== 0) {
+        // Normalize
+        const len = Math.hypot(dx, dy);
+        const nx = me.x + (dx / len) * speed;
+        const ny = me.y + (dy / len) * speed;
+
+        // Giới hạn trong sân chùa
+        me.x = Math.max(150, Math.min(1050, nx));
+        me.y = Math.max(220, Math.min(620, ny));
+
+        socket.emit('playerMove', { x: me.x, y: me.y });
+
+        // Tự động quét lá khi chạm tới
+        if (me.role === 'monk') {
+          leaves.forEach(leaf => {
+            const dist = Math.hypot(me.x - leaf.x, me.y - leaf.y);
+            if (dist < 35) {
+              socket.emit('sweepLeaf', leaf.id);
+            }
+          });
+        }
+      }
+    }
+
+    // Render 2D Graphics
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Sân Gạch Tàu Cổ Kính
+      ctx.fillStyle = '#8a5a36';
+      ctx.fillRect(100, 160, 1000, 500);
+      ctx.strokeStyle = '#734625';
+      ctx.lineWidth = 1;
+      for (let x = 100; x < 1100; x += 40) {
+        for (let y = 160; y < 660; y += 25) {
+          ctx.strokeRect(x, y, 40, 25);
+        }
+      }
+
+      // 2. Mái Chùa Điện Cổ Kính
+      ctx.fillStyle = '#991b1b';
+      ctx.fillRect(350, 40, 500, 120);
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(400, 90, 400, 70);
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = 'bold 20px serif';
+      ctx.fillText('TỰ TÂM THIỀN TỰ', 510, 80);
+
+      // 3. Cây Đa Cổ Thụ
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.arc(200, 200, 35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.arc(200, 180, 90, 0, Math.PI * 2);
+      ctx.arc(160, 210, 70, 0, Math.PI * 2);
+      ctx.arc(240, 210, 70, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4. Vẽ Lá Đa Rơi
+      leaves.forEach(leaf => {
+        ctx.save();
+        ctx.translate(leaf.x, leaf.y);
+        ctx.rotate(leaf.rotation);
+        ctx.fillStyle = '#eab308';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 10 * leaf.scale, 5 * leaf.scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // 5. Vẽ Người Chơi (Chú Tiểu Chibi & Trụ Trì)
+      Object.values(players).forEach(p => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+
+        if (p.role === 'abbot') {
+          // Hào Quang Trụ Trì
+          ctx.fillStyle = 'rgba(253, 224, 71, 0.3)';
+          ctx.beginPath();
+          ctx.arc(0, 0, 45, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Thân áo Cà sa
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.arc(0, 10, 18, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Đầu Chibi
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath();
+          ctx.arc(0, -10, 15, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Chú Tiểu Chibi
+          // Thân Áo Nâu
+          ctx.fillStyle = '#78350f';
+          ctx.beginPath();
+          ctx.arc(0, 8, 14, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Đầu
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath();
+          ctx.arc(0, -10, 13, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Nón lá đằng sau
+          ctx.fillStyle = '#b45309';
+          ctx.beginPath();
+          ctx.arc(p.facing === 'left' ? 8 : -8, -10, 10, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Chổi Tre Quét
+          ctx.strokeStyle = '#a16207';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(p.facing === 'left' ? -22 : 22, 12);
+          ctx.stroke();
+        }
+
+        // Tên Người Chơi
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.name, 0, -30);
+        ctx.restore();
+      });
+    }
+
+    // Joystick Touch Controls
+    function setupJoystick() {
+      const base = document.getElementById('joystickBase');
+      const thumb = document.getElementById('joystickThumb');
+      base.style.display = 'block';
+
+      let active = false;
+      let startX, startY;
+
+      base.addEventListener('touchstart', e => {
+        active = true;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      });
+
+      window.addEventListener('touchmove', e => {
+        if (!active) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+        const dist = Math.hypot(dx, dy);
+        const maxDist = 35;
+
+        const angle = Math.atan2(dy, dx);
+        const moveDist = Math.min(dist, maxDist);
+
+        thumb.style.transform = `translate(${Math.cos(angle) * moveDist}px, ${Math.sin(angle) * moveDist}px)`;
+        joystickDir = { x: Math.cos(angle), y: Math.sin(angle) };
+      });
+
+      const endTouch = () => {
+        active = false;
+        thumb.style.transform = 'translate(0px, 0px)';
+        joystickDir = { x: 0, y: 0 };
+      };
+
+      window.addEventListener('touchend', endTouch);
+    }
+
+    function gameLoop() {
+      update();
+      render();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

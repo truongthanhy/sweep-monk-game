@@ -32,9 +32,9 @@
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-2 text-amber-100">
 
-  <!-- Audio nhạc thiền (Stream nhạc sáo trúc / thiền định không bản quyền) -->
-  <audio id="zenAudio" loop>
-    <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf756.mp3?filename=meditation-flute-and-water-110294.mp3" type="audio/mpeg">
+  <!-- Thẻ Audio Nhạc Thiền (Sử dụng nguồn CDN trực tuyến chuẩn không bị chặn) -->
+  <audio id="zenAudio" loop preload="auto">
+    <source src="https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=zen-garden-11029.mp3" type="audio/mpeg">
   </audio>
 
   <!-- Modal Đăng Nhập -->
@@ -63,7 +63,6 @@
         <span class="text-yellow-400 text-base">✨ Phước Đức: <span id="uiMerit">0</span></span>
         <span class="text-amber-200">🧹 Đã Quét: <span id="uiSweeps">0</span> lá</span>
       </div>
-      <!-- Nút điều khiển nhạc thiền -->
       <div>
         <button id="musicToggleBtn" onclick="toggleMusic()" class="music-btn">
           🔇 <span id="musicText">Bật Nhạc Thiền</span>
@@ -78,7 +77,7 @@
       <div id="joystickThumb" class="joystick-thumb"></div>
     </div>
 
-    <!-- Khung Chat Toàn Tự (Góc dưới bên phải, ẩn/hiện tùy ý) -->
+    <!-- Khung Chat Toàn Tự (Góc dưới bên phải) -->
     <div id="chatWidget">
       <div id="chatToggle" onclick="toggleChat()">💬</div>
       <div id="chatPanel">
@@ -99,7 +98,6 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Nạp ảnh nền sân chùa
     const bgImage = new Image();
     bgImage.src = 'bg.png';
 
@@ -112,16 +110,13 @@
     const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
     let joystickDir = { x: 0, y: 0 };
 
-    // Xử lý bật/tắt nhạc thiền
     function toggleMusic() {
       const audio = document.getElementById('zenAudio');
-      const btnText = document.getElementById('musicText');
       const btn = document.getElementById('musicToggleBtn');
 
       if (isMusicPlaying) {
         audio.pause();
         isMusicPlaying = false;
-        btnText.innerText = 'Bật Nhạc Thiền';
         btn.innerHTML = '🔇 <span id="musicText">Bật Nhạc Thiền</span>';
       } else {
         audio.play().then(() => {
@@ -129,6 +124,7 @@
           btn.innerHTML = '🎵 <span id="musicText">Tắt Nhạc Thiền</span>';
         }).catch(err => {
           console.log("Trình duyệt chặn autoplay audio:", err);
+          alert("Trình duyệt đang chặn âm thanh. Vui lòng thử lại!");
         });
       }
     }
@@ -137,17 +133,18 @@
       const nameInput = document.getElementById('playerName');
       const name = nameInput ? nameInput.value.trim() : 'Chú Tiểu';
       
-      // Ẩn modal đăng nhập ngay lập tức tránh bị kẹt
       const modal = document.getElementById('joinModal');
       if (modal) modal.classList.add('hidden');
 
-      // Tự động bật nhạc thiền khi vào game (nếu trình duyệt cho phép)
+      // Tự động kích hoạt phát nhạc khi người chơi tương tác bấm nút vào game
       const audio = document.getElementById('zenAudio');
       audio.play().then(() => {
         isMusicPlaying = true;
         const btn = document.getElementById('musicToggleBtn');
         if(btn) btn.innerHTML = '🎵 <span id="musicText">Tắt Nhạc Thiền</span>';
-      }).catch(e => {});
+      }).catch(e => {
+        console.log("Autoplay bị chặn, người dùng có thể bật thủ công qua nút loa.");
+      });
 
       socket.emit('joinGame', { name: name });
       if ('ontouchstart' in window || navigator.maxTouchPoints > 0) setupJoystick();
@@ -247,7 +244,6 @@
 
       if (dx !== 0 || dy !== 0) {
         const len = Math.hypot(dx, dy);
-        // Giới hạn nhân vật chỉ di chuyển ở khu vực sân phía dưới
         me.x = Math.max(160, Math.min(1040, me.x + (dx / len) * speed));
         me.y = Math.max(340, Math.min(640, me.y + (dy / len) * speed));
 
@@ -261,11 +257,9 @@
       }
     }
 
-    // Vẽ giao diện đồ họa vector mượt mà
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Vẽ Ảnh Nền Chùa
       if (bgImage.complete && bgImage.naturalWidth !== 0) {
         ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
       } else {
@@ -273,7 +267,6 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // 2. Vẽ Lá Đa (Nằm trọn ở phần sân dưới)
       myLeaves.forEach(leaf => {
         ctx.save();
         ctx.translate(leaf.x, leaf.y);
@@ -287,39 +280,35 @@
         ctx.restore();
       });
 
-      // 3. Vẽ Nhân Vật (Phân biệt Chú Tiểu áo nâu vs Sư Thầy áo vàng sậm & Tích Trượng)
       Object.values(players).forEach(p => {
         ctx.save();
         ctx.translate(p.x, p.y);
 
         if (p.outfit === 'saffron') {
-          // --- SƯ THẦY (Đủ điểm thăng cấp) ---
-          ctx.fillStyle = '#b45309'; // Áo Cà Sa Vàng Sậm
+          // --- SƯ THẦY ---
+          ctx.fillStyle = '#b45309'; 
           ctx.beginPath(); ctx.arc(0, 12, 19, 0, Math.PI * 2); ctx.fill();
 
           ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, -10, 16, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = 'rgba(244, 63, 94, 0.4)'; ctx.beginPath(); ctx.arc(-6, -6, 3, 0, Math.PI * 2); ctx.arc(6, -6, 3, 0, Math.PI * 2); ctx.fill();
 
-          // Gậy Tích Trượng
           ctx.strokeStyle = '#facc15'; ctx.lineWidth = 4; ctx.beginPath();
           ctx.moveTo(p.facing === 'left' ? -25 : 25, -20); ctx.lineTo(p.facing === 'left' ? -25 : 25, 40); ctx.stroke();
           ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(p.facing === 'left' ? -25 : 25, -25, 10, 0, Math.PI * 2); ctx.fill();
 
         } else {
-          // --- CHÚ TIỂU (Mặc định) ---
-          ctx.fillStyle = '#78350f'; // Áo Nâu
+          // --- CHÚ TIỂU ---
+          ctx.fillStyle = '#78350f'; 
           ctx.beginPath(); ctx.arc(0, 10, 16, 0, Math.PI * 2); ctx.fill();
 
           ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, -10, 15, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = 'rgba(244, 63, 94, 0.55)'; ctx.beginPath(); ctx.arc(-6, -6, 3.5, 0, Math.PI * 2); ctx.arc(6, -6, 3.5, 0, Math.PI * 2); ctx.fill();
 
-          // Nón Lá & Chổi Tre
           ctx.fillStyle = '#d97706'; ctx.beginPath(); ctx.arc(p.facing === 'left' ? 11 : -11, -7, 12, 0, Math.PI * 2); ctx.fill();
           ctx.strokeStyle = '#92400e'; ctx.lineWidth = 4; ctx.beginPath();
           ctx.moveTo(0, 3); ctx.lineTo(p.facing === 'left' ? -28 : 28, 16); ctx.stroke();
         }
 
-        // Hiển thị Pháp Danh & Cấp Bậc
         ctx.fillStyle = '#ffffff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
         ctx.shadowColor = '#000000'; ctx.shadowBlur = 5;
         ctx.fillText(`${p.name}`, 0, -55);

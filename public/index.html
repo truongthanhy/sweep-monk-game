@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Thiền Viện Tự Tâm - Chú Tiểu Quét Lá Đa</title>
+  <title>Thiền Viện Tự Tâm - Quét Lá Đa Online</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -19,16 +19,16 @@
   <div id="joinModal" class="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
     <div class="bg-gradient-to-b from-amber-900 via-amber-950 to-black border-4 border-amber-600 rounded-3xl p-6 max-w-md w-full shadow-2xl text-center">
       <h1 class="text-3xl font-black text-yellow-300 mb-1 tracking-wide">🛕 Thiền Viện Tự Tâm</h1>
-      <p class="text-amber-200 text-sm mb-6">Trò chơi quét lá tích phước online</p>
+      <p class="text-amber-200 text-sm mb-6">Nhập pháp danh để lưu tích lũy phước đức</p>
       
       <div class="space-y-4 text-left">
         <div>
-          <label class="block text-xs uppercase tracking-wider font-bold text-yellow-400 mb-1">Pháp Danh:</label>
+          <label class="block text-xs uppercase tracking-wider font-bold text-yellow-400 mb-1">Pháp Danh của bạn:</label>
           <input type="text" id="playerName" value="Chú Tiểu Tánh Không" class="w-full bg-amber-950/80 border-2 border-amber-600 rounded-xl px-4 py-2.5 text-amber-100 focus:outline-none focus:border-yellow-400 font-semibold">
         </div>
 
         <div>
-          <label class="block text-xs uppercase tracking-wider font-bold text-yellow-400 mb-1">Chọn Vai Trò:</label>
+          <label class="block text-xs uppercase tracking-wider font-bold text-yellow-400 mb-1">Chọn Vai Trò Ban Đầu:</label>
           <div class="grid grid-cols-2 gap-3">
             <button type="button" id="btnRoleMonk" onclick="selectRole('monk')" class="p-3 border-2 border-yellow-400 bg-amber-800 rounded-xl text-center font-bold text-amber-100 shadow-md">
               👶 Chú Tiểu<br><span class="text-xs font-normal text-yellow-200">Quét lá tích phước</span>
@@ -39,7 +39,7 @@
           </div>
         </div>
 
-        <button onclick="startGame()" class="w-full bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 hover:from-yellow-400 hover:to-amber-400 text-amber-950 font-black text-lg py-3 rounded-xl shadow-lg transform active:scale-95 transition">
+        <button onclick="startGame()" class="w-full bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 hover:from-yellow-400 text-amber-950 font-black text-lg py-3 rounded-xl shadow-lg transform active:scale-95 transition">
           BƯỚC VÀO CỬA THIỀN ⛩️
         </button>
       </div>
@@ -64,7 +64,6 @@
     </div>
 
     <canvas id="gameCanvas" width="1200" height="700" class="w-full h-auto"></canvas>
-    
     <div id="joystickBase" class="joystick-base">
       <div id="joystickThumb" class="joystick-thumb"></div>
     </div>
@@ -75,15 +74,17 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Nạp ảnh nền trực tiếp từ file bg.png
+    // Nạp ảnh nền và ảnh chú tiểu mới
     const bgImage = new Image();
     bgImage.src = 'bg.png';
+
+    const monkImage = new Image();
+    monkImage.src = 'monk.png';
 
     let selectedRole = 'monk';
     let myId = null;
     let players = {};
     let myLeaves = [];
-    let blessingActive = false;
 
     const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
     let joystickDir = { x: 0, y: 0 };
@@ -98,24 +99,19 @@
       const name = document.getElementById('playerName').value.trim() || 'Chú Tiểu';
       document.getElementById('joinModal').classList.add('hidden');
       socket.emit('joinGame', { name: name, role: selectedRole });
-
-      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-        setupJoystick();
-      }
+      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) setupJoystick();
     }
 
-    function castBlessing() {
-      socket.emit('castBlessing');
-    }
+    function castBlessing() { socket.emit('castBlessing'); }
 
     socket.on('initGameState', (data) => {
       myId = data.playerId;
       players = data.players;
-      blessingActive = data.blessingActive;
-      if (players[myId]) myLeaves = players[myId].leaves || [];
-
-      if (players[myId] && players[myId].role === 'abbot') {
-        document.getElementById('abbotControls').classList.remove('hidden');
+      if (players[myId]) {
+        myLeaves = players[myId].leaves || [];
+        document.getElementById('uiMerit').innerText = players[myId].merit;
+        document.getElementById('uiSweeps').innerText = players[myId].sweeps;
+        if (players[myId].role === 'abbot') document.getElementById('abbotControls').classList.remove('hidden');
       }
     });
 
@@ -133,6 +129,7 @@
       if (players[data.playerId]) {
         players[data.playerId].merit = data.merit;
         players[data.playerId].sweeps = data.sweeps;
+        players[data.playerId].title = data.title;
         players[data.playerId].leaves = data.leaves;
         if (data.playerId === myId) {
           myLeaves = data.leaves;
@@ -142,15 +139,8 @@
       }
     });
 
-    socket.on('blessingStarted', () => {
-      blessingActive = true;
-      document.getElementById('blessingBanner').classList.remove('hidden');
-    });
-
-    socket.on('blessingEnded', () => {
-      blessingActive = false;
-      document.getElementById('blessingBanner').classList.add('hidden');
-    });
+    socket.on('blessingStarted', () => document.getElementById('blessingBanner').classList.remove('hidden'));
+    socket.on('blessingEnded', () => document.getElementById('blessingBanner').classList.add('hidden'));
 
     window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
     window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
@@ -173,18 +163,14 @@
 
       if (dx !== 0 || dy !== 0) {
         const len = Math.hypot(dx, dy);
-        const nx = me.x + (dx / len) * speed;
-        const ny = me.y + (dy / len) * speed;
-
-        me.x = Math.max(160, Math.min(1040, nx));
-        me.y = Math.max(260, Math.min(640, ny));
+        me.x = Math.max(160, Math.min(1040, me.x + (dx / len) * speed));
+        me.y = Math.max(260, Math.min(640, me.y + (dy / len) * speed));
 
         socket.emit('playerMove', { x: me.x, y: me.y, facing: dx < 0 ? 'left' : (dx > 0 ? 'right' : me.facing) });
 
         if (me.role === 'monk') {
           myLeaves.forEach(leaf => {
-            const dist = Math.hypot(me.x - leaf.x, me.y - leaf.y);
-            if (dist < 40) {
+            if (Math.hypot(me.x - leaf.x, me.y - leaf.y) < 40) {
               socket.emit('sweepLeaf', leaf.id);
             }
           });
@@ -195,7 +181,7 @@
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Vẽ Ảnh Nền Trực Tiếp
+      // Vẽ Background
       if (bgImage.complete && bgImage.naturalWidth !== 0) {
         ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
       } else {
@@ -203,79 +189,52 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // 2. Vẽ Lá Đa Rơi Trải Khắp Sân
+      // Vẽ Lá Đa
       myLeaves.forEach(leaf => {
         ctx.save();
         ctx.translate(leaf.x, leaf.y);
         ctx.rotate(leaf.rotation);
         ctx.fillStyle = '#facc15';
         ctx.beginPath();
-        ctx.ellipse(0, 0, 12 * leaf.scale, 6 * leaf.scale, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 12 * leaf.scale, 5.5 * leaf.scale, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = '#ca8a04';
         ctx.stroke();
         ctx.restore();
       });
 
-      // 3. Vẽ Người Chơi
+      // Vẽ Người Chơi & Sprite Chú Tiểu mới
       Object.values(players).forEach(p => {
         ctx.save();
         ctx.translate(p.x, p.y);
 
         if (p.role === 'abbot') {
-          let gradHaoQuang = ctx.createRadialGradient(0, -5, 5, 0, -5, 50);
-          gradHaoQuang.addColorStop(0, 'rgba(253, 224, 71, 0.85)');
+          let gradHaoQuang = ctx.createRadialGradient(0, -5, 5, 0, -5, 55);
+          gradHaoQuang.addColorStop(0, 'rgba(253, 224, 71, 0.9)');
           gradHaoQuang.addColorStop(1, 'rgba(253, 224, 71, 0)');
           ctx.fillStyle = gradHaoQuang;
-          ctx.beginPath();
-          ctx.arc(0, -5, 50, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(0, -5, 55, 0, Math.PI * 2); ctx.fill();
 
-          ctx.fillStyle = '#d97706';
-          ctx.beginPath();
-          ctx.arc(0, 12, 19, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = '#fef08a';
-          ctx.beginPath();
-          ctx.arc(0, -10, 16, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillStyle = '#d97706'; ctx.beginPath(); ctx.arc(0, 12, 19, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, -10, 16, 0, Math.PI * 2); ctx.fill();
         } else {
-          ctx.fillStyle = '#78350f';
-          ctx.beginPath();
-          ctx.arc(0, 10, 16, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = '#fef08a';
-          ctx.beginPath();
-          ctx.arc(0, -10, 15, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = 'rgba(244, 63, 94, 0.55)';
-          ctx.beginPath();
-          ctx.arc(-6, -6, 3.5, 0, Math.PI * 2);
-          ctx.arc(6, -6, 3.5, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.fillStyle = '#d97706';
-          ctx.beginPath();
-          ctx.arc(p.facing === 'left' ? 11 : -11, -7, 12, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.strokeStyle = '#92400e';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(0, 3);
-          ctx.lineTo(p.facing === 'left' ? -28 : 28, 16);
-          ctx.stroke();
+          // Nếu đã tải thành công sprite monk.png thì vẽ ảnh, nếu chưa thì vẽ hình khối dự phòng
+          if (monkImage.complete && monkImage.naturalWidth !== 0) {
+            ctx.drawImage(monkImage, -25, -45, 50, 60);
+          } else {
+            ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.arc(0, 10, 16, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, -10, 15, 0, Math.PI * 2); ctx.fill();
+          }
         }
 
+        // Tên kèm Danh Hiệu thăng cấp
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 13px sans-serif';
+        ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
-        ctx.shadowColor = '#000000';
-        ctx.shadowBlur = 5;
-        ctx.fillText(`${p.name} ${p.role === 'monk' ? `(Phước: ${p.merit || 0})` : '(Trụ Trì)'}`, 0, -35);
+        ctx.shadowColor = '#000000'; ctx.shadowBlur = 4;
+        ctx.fillText(`${p.name}`, 0, -50);
+        ctx.fillStyle = '#fde047';
+        ctx.fillText(`${p.title || '👶 Chú Tiểu'}`, 0, -35);
         ctx.shadowBlur = 0;
         ctx.restore();
       });
@@ -285,45 +244,25 @@
       const base = document.getElementById('joystickBase');
       const thumb = document.getElementById('joystickThumb');
       base.style.display = 'block';
-
-      let active = false;
-      let startX, startY;
+      let active = false, startX, startY;
 
       base.addEventListener('touchstart', e => {
-        active = true;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
+        active = true; startX = e.touches[0].clientX; startY = e.touches[0].clientY;
       });
-
       window.addEventListener('touchmove', e => {
         if (!active) return;
-        const touch = e.touches[0];
-        const dx = touch.clientX - startX;
-        const dy = touch.clientY - startY;
-        const dist = Math.hypot(dx, dy);
-        const maxDist = 35;
-        const angle = Math.atan2(dy, dx);
+        const dx = e.touches[0].clientX - startX;
+        const dy = e.touches[0].clientY - startY;
+        const dist = Math.hypot(dx, dy), maxDist = 35, angle = Math.atan2(dy, dx);
         const moveDist = Math.min(dist, maxDist);
-
         thumb.style.transform = `translate(${Math.cos(angle) * moveDist}px, ${Math.sin(angle) * moveDist}px)`;
         joystickDir = { x: Math.cos(angle), y: Math.sin(angle) };
       });
-
-      const endTouch = () => {
-        active = false;
-        thumb.style.transform = 'translate(0px, 0px)';
-        joystickDir = { x: 0, y: 0 };
-      };
-
+      const endTouch = () => { active = false; thumb.style.transform = 'translate(0px, 0px)'; joystickDir = { x: 0, y: 0 }; };
       window.addEventListener('touchend', endTouch);
     }
 
-    function gameLoop() {
-      update();
-      render();
-      requestAnimationFrame(gameLoop);
-    }
-
+    function gameLoop() { update(); render(); requestAnimationFrame(gameLoop); }
     gameLoop();
   </script>
 </body>

@@ -2,22 +2,43 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const gameState = {
-  players: {},
-  abbotId: null,
-  blessingActive: false
-};
+// File Database giả lập đơn giản lưu trữ điểm người chơi
+const DB_FILE = path.join(__dirname, 'database.json');
 
-// Tạo lá ngẫu nhiên
+function loadDatabase() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    }
+  } catch (e) { console.error(e); }
+  return {};
+}
+
+function saveDatabase(db) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  } catch (e) { console.error(e); }
+}
+
+let userDB = loadDatabase();
+const gameState = { players: {}, abbotId: null, blessingActive: false };
+
+// Hàm tính cấp bậc dựa trên tổng Phước Đức
+function getTitleAndRole(merit, requestedRole) {
+  if (requestedRole === 'abbot') return { title: '🧙‍♂️ Trụ Trì', role: 'abbot' };
+  if (merit >= 500) return { title: '🧘‍♂️ Sư Thầy Thâm Viễn', role: 'monk' };
+  if (merit >= 200) return { title: '🌿 Chú Tiểu Giác Ngộ', role: 'monk' };
+  return { title: '👶 Chú Tiểu Tập Sự', role: 'monk' };
+}
+
 function createRandomLeaf() {
   return {
     id: Math.random().toString(36).substr(2, 9),
@@ -29,32 +50,36 @@ function createRandomLeaf() {
 }
 
 io.on('connection', (socket) => {
-  console.log(`[+] Người chơi kết nối: ${socket.id}`);
+  console.log(`[+] Kết nối: ${socket.id}`);
 
   socket.on('joinGame', (data) => {
-    let role = data.role || 'monk';
-    if (role === 'abbot' && !gameState.abbotId) {
-      gameState.abbotId = socket.id;
-    } else if (role === 'abbot' && gameState.abbotId) {
-      role = 'monk';
+    let name = data.name || 'Chú Tiểu';
+    
+    // Nạp hoặc khởi tạo dữ liệu user từ database
+    if (!userDB[name]) {
+      userDB[name] = { merit: 0, sweeps: 0 };
     }
 
-    // Khởi tạo mỗi Chú Tiểu có sẵn một bộ lá đa độc lập để quét (giải quyết triệt để lỗi tranh chấp)
-    const initialLeaves = [];
-    for (let i = 0; i < 20; i++) {
-      initialLeaves.push(createRandomLeaf());
+    let roleData = getTitleAndRole(userDB[name].merit, data.role);
+    if (roleData.role === 'abbot' && gameState.abbotId && gameState.abbotId !== socket.id) {
+      roleData.role = 'monk'; // Nếu có trụ trì rồi thì ép về chú tiểu
     }
+    if (roleData.role === 'abbot') gameState.abbotId = socket.id;
+
+    const initialLeaves = [];
+    for (let i = 0; i < 20; i++) initialLeaves.push(createRandomLeaf());
 
     gameState.players[socket.id] = {
       id: socket.id,
-      name: data.name || 'Chú Tiểu Thiền',
-      role: role,
-      x: role === 'abbot' ? 600 : 300 + Math.random() * 600,
-      y: role === 'abbot' ? 240 : 400 + Math.random() * 200,
-      merit: 0,
-      sweeps: 0,
+      name: name,
+      title: roleData.title,
+      role: roleData.role,
+      x: 300 + Math.random() * 600,
+      y: 400 + Math.random() * 200,
+      merit: userDB[name].merit,
+      sweeps: userDB[name].sweeps,
       facing: 'right',
-      leaves: initialLeaves // Lá đa riêng của chú tiểu này
+      leaves: initialLeaves
     };
 
     socket.emit('initGameState', {
@@ -69,22 +94,13 @@ io.on('connection', (socket) => {
   socket.on('playerMove', (pos) => {
     if (gameState.players[socket.id]) {
       const p = gameState.players[socket.id];
-      if (pos.x < p.x) p.facing = 'left';
-      else if (pos.x > p.x) p.facing = 'right';
-      
+      p.facing = pos.x < p.x ? 'left' : (pos.x > p.x ? 'right' : p.facing);
       p.x = pos.x;
       p.y = pos.y;
-
-      socket.broadcast.emit('playerMoved', {
-        id: socket.id,
-        x: p.x,
-        y: p.y,
-        facing: p.facing
-      });
+      socket.broadcast.emit('playerMoved', { id: socket.id, x: p.x, y: p.y, facing: p.facing });
     }
   });
 
-  // Khi chú tiểu quét sạch lá của mình -> tự động sinh lá mới cho riêng họ
   socket.on('sweepLeaf', (leafId) => {
     const p = gameState.players[socket.id];
     if (p && p.role === 'monk') {
@@ -95,14 +111,25 @@ io.on('connection', (socket) => {
         const points = gameState.blessingActive ? 20 : 10;
         p.merit += points;
         p.sweeps += 1;
-
-        // Sinh bù lá mới cho chú tiểu này
         p.leaves.push(createRandomLeaf());
+
+        // Cập nhật cấp bậc tự động khi đạt mốc phước đức
+        if (p.merit >= 500) p.title = '🧘‍♂️ Sư Thầy Thâm Viễn';
+        else if (p.merit >= 200) p.title = '🌿 Chú Tiểu Giác Ngộ';
+        else p.title = '👶 Chú Tiểu Tập Sự';
+
+        // Lưu vào Database vĩnh viễn
+        if (userDB[p.name]) {
+          userDB[p.name].merit = p.merit;
+          userDB[p.name].sweeps = p.sweeps;
+          saveDatabase(userDB);
+        }
 
         io.emit('updatePlayerScore', {
           playerId: socket.id,
           merit: p.merit,
           sweeps: p.sweeps,
+          title: p.title,
           leaves: p.leaves
         });
       }
@@ -113,7 +140,6 @@ io.on('connection', (socket) => {
     if (socket.id === gameState.abbotId && !gameState.blessingActive) {
       gameState.blessingActive = true;
       io.emit('blessingStarted');
-
       setTimeout(() => {
         gameState.blessingActive = false;
         io.emit('blessingEnded');
@@ -122,16 +148,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log(`[-] Người chơi rời đi: ${socket.id}`);
-    if (socket.id === gameState.abbotId) {
-      gameState.abbotId = null;
-    }
+    if (socket.id === gameState.abbotId) gameState.abbotId = null;
     delete gameState.players[socket.id];
     io.emit('playerLeft', socket.id);
   });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server đang chạy tại cổng ${PORT}`);
-});
+server.listen(PORT, () => console.log(`🚀 Server chạy cổng ${PORT}`));

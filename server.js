@@ -10,40 +10,25 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// File Database giả lập đơn giản lưu trữ điểm người chơi
+// File Database giả lập đơn giản
 const DB_FILE = path.join(__dirname, 'database.json');
-
-function loadDatabase() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    }
-  } catch (e) { console.error(e); }
-  return {};
-}
-
-function saveDatabase(db) {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-  } catch (e) { console.error(e); }
-}
+function loadDatabase() { try { if (fs.existsSync(DB_FILE)) return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (e) {} return {}; }
+function saveDatabase(db) { try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (e) {} }
 
 let userDB = loadDatabase();
-const gameState = { players: {}, abbotId: null, blessingActive: false };
+const gameState = { players: {}, abbotId: null, blessingActive: false, chatMessages: [] };
 
-// Hàm tính cấp bậc dựa trên tổng Phước Đức
-function getTitleAndRole(merit, requestedRole) {
-  if (requestedRole === 'abbot') return { title: '🧙‍♂️ Trụ Trì', role: 'abbot' };
-  if (merit >= 500) return { title: '🧘‍♂️ Sư Thầy Thâm Viễn', role: 'monk' };
-  if (merit >= 200) return { title: '🌿 Chú Tiểu Giác Ngộ', role: 'monk' };
-  return { title: '👶 Chú Tiểu Tập Sự', role: 'monk' };
+// Hàm tính cấp bậc & trang phục dựa trên tổng Phước Đức
+function getTitleData(merit) {
+  if (merit >= 500) return { title: '🧘‍♂️ Sư Thầy Thâm Viễn', outfit: 'saffron', points: 20 }; // Thăng cấp
+  return { title: '👶 Chú Tiểu Tập Sự', outfit: 'brown', points: 10 }; // Mặc định
 }
 
 function createRandomLeaf() {
   return {
     id: Math.random().toString(36).substr(2, 9),
     x: 180 + Math.random() * 840,
-    y: 280 + Math.random() * 340,
+    y: 300 + Math.random() * 320, // CHỈ xuất hiện phần sân dưới
     rotation: Math.random() * Math.PI * 2,
     scale: 0.8 + Math.random() * 0.4
   };
@@ -55,16 +40,8 @@ io.on('connection', (socket) => {
   socket.on('joinGame', (data) => {
     let name = data.name || 'Chú Tiểu';
     
-    // Nạp hoặc khởi tạo dữ liệu user từ database
-    if (!userDB[name]) {
-      userDB[name] = { merit: 0, sweeps: 0 };
-    }
-
-    let roleData = getTitleAndRole(userDB[name].merit, data.role);
-    if (roleData.role === 'abbot' && gameState.abbotId && gameState.abbotId !== socket.id) {
-      roleData.role = 'monk'; // Nếu có trụ trì rồi thì ép về chú tiểu
-    }
-    if (roleData.role === 'abbot') gameState.abbotId = socket.id;
+    if (!userDB[name]) userDB[name] = { merit: 0, sweeps: 0 };
+    let rankData = getTitleData(userDB[name].merit);
 
     const initialLeaves = [];
     for (let i = 0; i < 20; i++) initialLeaves.push(createRandomLeaf());
@@ -72,8 +49,8 @@ io.on('connection', (socket) => {
     gameState.players[socket.id] = {
       id: socket.id,
       name: name,
-      title: roleData.title,
-      role: roleData.role,
+      title: rankData.title,
+      outfit: rankData. outfit, // Brown or Saffron
       x: 300 + Math.random() * 600,
       y: 400 + Math.random() * 200,
       merit: userDB[name].merit,
@@ -85,7 +62,8 @@ io.on('connection', (socket) => {
     socket.emit('initGameState', {
       playerId: socket.id,
       players: gameState.players,
-      blessingActive: gameState.blessingActive
+      blessingActive: gameState.blessingActive,
+      chatMessages: gameState.chatMessages // Gửi 50 tin nhắn chat gần nhất
     });
 
     socket.broadcast.emit('playerJoined', gameState.players[socket.id]);
@@ -103,22 +81,25 @@ io.on('connection', (socket) => {
 
   socket.on('sweepLeaf', (leafId) => {
     const p = gameState.players[socket.id];
-    if (p && p.role === 'monk') {
+    if (p) {
       const leafIndex = p.leaves.findIndex(l => l.id === leafId);
       if (leafIndex !== -1) {
         p.leaves.splice(leafIndex, 1);
         
-        const points = gameState.blessingActive ? 20 : 10;
+        let rankData = getTitleData(p.merit);
+        const basePoints = rankData.points;
+        const points = gameState.blessingActive ? basePoints * 2 : basePoints;
+        
         p.merit += points;
         p.sweeps += 1;
         p.leaves.push(createRandomLeaf());
 
-        // Cập nhật cấp bậc tự động khi đạt mốc phước đức
-        if (p.merit >= 500) p.title = '🧘‍♂️ Sư Thầy Thâm Viễn';
-        else if (p.merit >= 200) p.title = '🌿 Chú Tiểu Giác Ngộ';
-        else p.title = '👶 Chú Tiểu Tập Sự';
+        // Kiểm tra và thăng cấp tự động
+        rankData = getTitleData(p.merit);
+        p.title = rankData.title;
+        p.outfit = rankData.outfit;
 
-        // Lưu vào Database vĩnh viễn
+        // Lưu Database
         if (userDB[p.name]) {
           userDB[p.name].merit = p.merit;
           userDB[p.name].sweeps = p.sweeps;
@@ -126,29 +107,24 @@ io.on('connection', (socket) => {
         }
 
         io.emit('updatePlayerScore', {
-          playerId: socket.id,
-          merit: p.merit,
-          sweeps: p.sweeps,
-          title: p.title,
-          leaves: p.leaves
+          playerId: socket.id, merit: p.merit, sweeps: p.sweeps, title: p.title, outfit: p.outfit, leaves: p.leaves
         });
       }
     }
   });
 
-  socket.on('castBlessing', () => {
-    if (socket.id === gameState.abbotId && !gameState.blessingActive) {
-      gameState.blessingActive = true;
-      io.emit('blessingStarted');
-      setTimeout(() => {
-        gameState.blessingActive = false;
-        io.emit('blessingEnded');
-      }, 15000);
+  // Xử lý gửi tin nhắn Chat
+  socket.on('sendChatMessage', (msg) => {
+    const p = gameState.players[socket.id];
+    if (p && msg.trim()) {
+      const chatMsg = { name: p.name, msg: msg.trim().substring(0, 100), time: Date.now() };
+      gameState.chatMessages.push(chatMsg);
+      if (gameState.chatMessages.length > 50) gameState.chatMessages.shift(); // Chỉ giữ 50 tin nhắn gần nhất
+      io.emit('newChatMessage', chatMsg);
     }
   });
 
   socket.on('disconnect', () => {
-    if (socket.id === gameState.abbotId) gameState.abbotId = null;
     delete gameState.players[socket.id];
     io.emit('playerLeft', socket.id);
   });

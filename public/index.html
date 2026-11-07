@@ -70,4 +70,279 @@
       </div>
     </div>
 
-    <canvas id="
+    <canvas id="gameCanvas" width="1200" height="700" class="w-full h-auto"></canvas>
+    
+    <!-- Joystick điều khiển di động (Góc dưới bên trái) -->
+    <div id="joystickBase" class="joystick-base">
+      <div id="joystickThumb" class="joystick-thumb"></div>
+    </div>
+
+    <!-- Khung Chat Toàn Tự (Góc dưới bên phải) -->
+    <div id="chatWidget">
+      <div id="chatToggle" onclick="toggleChat()">💬</div>
+      <div id="chatPanel">
+        <div id="chatHeader">
+          <span>💬 Thảo Luận Thiền Viện</span>
+          <span onclick="toggleChat()" class="cursor-pointer text-yellow-100 text-lg hover:text-red-400">✖</span>
+        </div>
+        <div id="chatMessages"></div>
+        <div id="chatInputBar">
+          <input type="text" id="chatInput" placeholder="Nhập tin nhắn..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const bgImage = new Image();
+    bgImage.src = 'bg.png';
+
+    let myId = null;
+    let players = {};
+    let myLeaves = [];
+    let chatPanelVisible = false;
+    let isMusicPlaying = false;
+
+    const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+    let joystickDir = { x: 0, y: 0 };
+
+    function toggleMusic() {
+      const audio = document.getElementById('zenAudio');
+      const btn = document.getElementById('musicToggleBtn');
+
+      if (isMusicPlaying) {
+        audio.pause();
+        isMusicPlaying = false;
+        btn.innerHTML = '🔇 <span id="musicText">Bật Nhạc Thiền</span>';
+      } else {
+        audio.play().then(() => {
+          isMusicPlaying = true;
+          btn.innerHTML = '🎵 <span id="musicText">Tắt Nhạc Thiền</span>';
+        }).catch(err => {
+          console.log("Trình duyệt chặn autoplay audio:", err);
+          alert("Trình duyệt đang chặn âm thanh. Vui lòng bấm lại!");
+        });
+      }
+    }
+
+    function startGame() {
+      const nameInput = document.getElementById('playerName');
+      const name = nameInput ? nameInput.value.trim() : 'Chú Tiểu';
+      
+      const modal = document.getElementById('joinModal');
+      if (modal) modal.classList.add('hidden');
+
+      const audio = document.getElementById('zenAudio');
+      audio.play().then(() => {
+        isMusicPlaying = true;
+        const btn = document.getElementById('musicToggleBtn');
+        if(btn) btn.innerHTML = '🎵 <span id="musicText">Tắt Nhạc Thiền</span>';
+      }).catch(e => {
+        console.log("Autoplay bị chặn, người dùng có thể bật thủ công qua nút loa.");
+      });
+
+      socket.emit('joinGame', { name: name });
+      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) setupJoystick();
+    }
+
+    function toggleChat() {
+      chatPanelVisible = !chatPanelVisible;
+      document.getElementById('chatPanel').style.display = chatPanelVisible ? 'block' : 'none';
+      document.getElementById('chatToggle').style.display = chatPanelVisible ? 'none' : 'flex';
+      if (chatPanelVisible) {
+        setTimeout(() => document.getElementById('chatInput').focus(), 100);
+      }
+    }
+
+    function sendChatMessage() {
+      const input = document.getElementById('chatInput');
+      if (input.value.trim()) {
+        socket.emit('sendChatMessage', input.value);
+        input.value = '';
+      }
+    }
+
+    socket.on('initGameState', (data) => {
+      myId = data.playerId;
+      players = data.players;
+      if (players[myId]) {
+        myLeaves = players[myId].leaves || [];
+        document.getElementById('uiMerit').innerText = players[myId].merit;
+        document.getElementById('uiSweeps').innerText = players[myId].sweeps;
+      }
+      const messagesContainer = document.getElementById('chatMessages');
+      messagesContainer.innerHTML = '';
+      if (data.chatMessages) data.chatMessages.forEach(addChatMessageToUI);
+    });
+
+    socket.on('playerJoined', (p) => { players[p.id] = p; });
+    socket.on('playerMoved', (data) => {
+      if (players[data.id]) {
+        players[data.id].x = data.x;
+        players[data.id].y = data.y;
+        players[data.id].facing = data.facing;
+      }
+    });
+    socket.on('playerLeft', (id) => { delete players[id]; });
+
+    socket.on('updatePlayerScore', (data) => {
+      if (players[data.playerId]) {
+        players[data.playerId].merit = data.merit;
+        players[data.playerId].sweeps = data.sweeps;
+        players[data.playerId].title = data.title;
+        players[data.playerId].outfit = data.outfit;
+        players[data.playerId].leaves = data.leaves;
+        if (data.playerId === myId) {
+          myLeaves = data.leaves;
+          document.getElementById('uiMerit').innerText = data.merit;
+          document.getElementById('uiSweeps').innerText = data.sweeps;
+        }
+      }
+    });
+
+    socket.on('newChatMessage', addChatMessageToUI);
+
+    function addChatMessageToUI(chatMsg) {
+      const messagesContainer = document.getElementById('chatMessages');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'mb-2';
+      msgDiv.innerHTML = `<span class="chat-msg-user">${chatMsg.name}:</span> ${chatMsg.msg}`;
+      messagesContainer.appendChild(msgDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    window.addEventListener('keydown', e => { 
+      if (chatPanelVisible && document.activeElement === document.getElementById('chatInput')) return;
+      if (keys.hasOwnProperty(e.key)) keys[e.key] = true; 
+    });
+    window.addEventListener('keyup', e => { 
+      if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+    });
+
+    function update() {
+      if (!myId || !players[myId]) return;
+      if (chatPanelVisible && document.activeElement === document.getElementById('chatInput')) return;
+
+      const me = players[myId];
+      let speed = 5;
+      let dx = 0, dy = 0;
+
+      if (keys.w || keys.ArrowUp) dy -= 1;
+      if (keys.s || keys.ArrowDown) dy += 1;
+      if (keys.a || keys.ArrowLeft) dx -= 1;
+      if (keys.d || keys.ArrowRight) dx += 1;
+
+      if (joystickDir.x !== 0 || joystickDir.y !== 0) {
+        dx = joystickDir.x;
+        dy = joystickDir.y;
+      }
+
+      if (dx !== 0 || dy !== 0) {
+        const len = Math.hypot(dx, dy);
+        me.x = Math.max(160, Math.min(1040, me.x + (dx / len) * speed));
+        me.y = Math.max(340, Math.min(640, me.y + (dy / len) * speed));
+
+        socket.emit('playerMove', { x: me.x, y: me.y, facing: dx < 0 ? 'left' : (dx > 0 ? 'right' : me.facing) });
+
+        myLeaves.forEach(leaf => {
+          if (Math.hypot(me.x - leaf.x, me.y - leaf.y) < 40) {
+            socket.emit('sweepLeaf', leaf.id);
+          }
+        });
+      }
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (bgImage.complete && bgImage.naturalWidth !== 0) {
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = '#431407';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      myLeaves.forEach(leaf => {
+        ctx.save();
+        ctx.translate(leaf.x, leaf.y);
+        ctx.rotate(leaf.rotation);
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12 * leaf.scale, 5.5 * leaf.scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ca8a04';
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      Object.values(players).forEach(p => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+
+        if (p.outfit === 'saffron') {
+          // --- SƯ THẦY ---
+          ctx.fillStyle = '#b45309'; 
+          ctx.beginPath(); ctx.arc(0, 12, 19, 0, Math.PI * 2); ctx.fill();
+
+          ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, -10, 16, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.4)'; ctx.beginPath(); ctx.arc(-6, -6, 3, 0, Math.PI * 2); ctx.arc(6, -6, 3, 0, Math.PI * 2); ctx.fill();
+
+          ctx.strokeStyle = '#facc15'; ctx.lineWidth = 4; ctx.beginPath();
+          ctx.moveTo(p.facing === 'left' ? -25 : 25, -20); ctx.lineTo(p.facing === 'left' ? -25 : 25, 40); ctx.stroke();
+          ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(p.facing === 'left' ? -25 : 25, -25, 10, 0, Math.PI * 2); ctx.fill();
+
+        } else {
+          // --- CHÚ TIỂU ---
+          ctx.fillStyle = '#78350f'; 
+          ctx.beginPath(); ctx.arc(0, 10, 16, 0, Math.PI * 2); ctx.fill();
+
+          ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, -10, 15, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.55)'; ctx.beginPath(); ctx.arc(-6, -6, 3.5, 0, Math.PI * 2); ctx.arc(6, -6, 3.5, 0, Math.PI * 2); ctx.fill();
+
+          ctx.fillStyle = '#d97706'; ctx.beginPath(); ctx.arc(p.facing === 'left' ? 11 : -11, -7, 12, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#92400e'; ctx.lineWidth = 4; ctx.beginPath();
+          ctx.moveTo(0, 3); ctx.lineTo(p.facing === 'left' ? -28 : 28, 16); ctx.stroke();
+        }
+
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.shadowColor = '#000000'; ctx.shadowBlur = 5;
+        ctx.fillText(`${p.name}`, 0, -55);
+        ctx.fillStyle = p.outfit === 'saffron' ? '#fde047' : '#fbbf24';
+        ctx.fillText(`${p.title || '👶 Chú Tiểu'}`, 0, -40);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      });
+    }
+
+    function setupJoystick() {
+      const base = document.getElementById('joystickBase');
+      const thumb = document.getElementById('joystickThumb');
+      base.style.display = 'block';
+      let active = false, startX, startY;
+
+      base.addEventListener('touchstart', e => {
+        active = true; startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      });
+      window.addEventListener('touchmove', e => {
+        if (!active) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+        const dist = Math.hypot(dx, dy), maxDist = 30, angle = Math.atan2(dy, dx);
+        const moveDist = Math.min(dist, maxDist);
+        thumb.style.transform = `translate(${Math.cos(angle) * moveDist}px, ${Math.sin(angle) * moveDist}px)`;
+        joystickDir = { x: Math.cos(angle), y: Math.sin(angle) };
+      });
+      const endTouch = () => { active = false; thumb.style.transform = 'translate(0px, 0px)'; joystickDir = { x: 0, y: 0 }; };
+      window.addEventListener('touchend', endTouch);
+    }
+
+    function gameLoop() { update(); render(); requestAnimationFrame(gameLoop); }
+    gameLoop();
+  </script>
+</body>
+</html>

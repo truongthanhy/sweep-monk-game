@@ -75,6 +75,10 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
+    // Nạp ảnh nền trực tiếp từ file bg.png
+    const bgImage = new Image();
+    bgImage.src = 'bg.png';
+
     let selectedRole = 'monk';
     let myId = null;
     let players = {};
@@ -188,95 +192,18 @@
       }
     }
 
-    // Render Canvas Chi Tiết Sắc Nét Hơn
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 1. Bầu trời hoàng hôn rực rỡ
-      let gradSky = ctx.createLinearGradient(0, 0, 0, 240);
-      gradSky.addColorStop(0, '#fde047');
-      gradSky.addColorStop(0.5, '#f97316');
-      gradSky.addColorStop(1, '#c2410c');
-      ctx.fillStyle = gradSky;
-      ctx.fillRect(0, 0, canvas.width, 240);
-
-      // Mặt trời lặn
-      let gradSun = ctx.createRadialGradient(600, 190, 5, 600, 190, 80);
-      gradSun.addColorStop(0, '#fffbeb');
-      gradSun.addColorStop(0.5, 'rgba(254, 240, 138, 0.6)');
-      gradSun.addColorStop(1, 'rgba(254, 240, 138, 0)');
-      ctx.fillStyle = gradSun;
-      ctx.beginPath();
-      ctx.arc(600, 190, 80, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 2. Sân gạch thẻ màu đỏ ấm áp
-      let gradYard = ctx.createLinearGradient(0, 240, 0, 700);
-      gradYard.addColorStop(0, '#9a3412');
-      gradYard.addColorStop(1, '#431407');
-      ctx.fillStyle = gradYard;
-      ctx.fillRect(80, 240, 1040, 460);
-
-      ctx.strokeStyle = '#7c2d12';
-      ctx.lineWidth = 1.5;
-      for (let x = 80; x < 1120; x += 55) {
-        for (let y = 240; y < 700; y += 32) {
-          ctx.strokeRect(x, y, 55, 32);
-        }
+      // 1. Vẽ Ảnh Nền Trực Tiếp
+      if (bgImage.complete && bgImage.naturalWidth !== 0) {
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = '#431407';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // 3. Kiến trúc Chính Điện Cổ Kính (Mái ngói cong, cột gỗ, đèn lồng)
-      // Mái ngói trên cong vút
-      ctx.fillStyle = '#7f1d1d';
-      ctx.beginPath();
-      ctx.moveTo(260, 90);
-      ctx.quadraticCurveTo(600, 30, 940, 90);
-      ctx.lineTo(910, 115);
-      ctx.quadraticCurveTo(600, 60, 290, 115);
-      ctx.fill();
-
-      // Thân chính điện
-      ctx.fillStyle = '#991b1b';
-      ctx.fillRect(320, 115, 560, 125);
-      ctx.strokeStyle = '#450a0a';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(320, 115, 560, 125);
-
-      // Đèn lồng đỏ treo hiên
-      drawLantern(370, 140);
-      drawLantern(500, 140);
-      drawLantern(700, 140);
-      drawLantern(830, 140);
-
-      // Biển hiệu dát vàng chữ thư pháp
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(470, 130, 260, 45);
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(470, 130, 260, 45);
-      ctx.fillStyle = '#fde047';
-      ctx.font = 'bold 18px serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🛕 THIỀN VIỆN TỰ TÂM', 600, 158);
-
-      // 4. Hai Cây Đa Cổ Thụ & Rễ Phụ Xanh Mướt
-      drawAncientBanyan(150, 160);
-      drawAncientBanyan(1050, 160);
-
-      // Ao sen thanh tịnh phía trước
-      ctx.fillStyle = '#075985';
-      ctx.beginPath();
-      ctx.ellipse(600, 645, 230, 42, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      drawLotus(510, 640);
-      drawLotus(600, 650);
-      drawLotus(690, 642);
-
-      // 5. Vẽ Lá Đa Rơi Trải Khắp Sân
+      // 2. Vẽ Lá Đa Rơi Trải Khắp Sân
       myLeaves.forEach(leaf => {
         ctx.save();
         ctx.translate(leaf.x, leaf.y);
@@ -290,13 +217,12 @@
         ctx.restore();
       });
 
-      // 6. Vẽ Tất Cả Người Chơi (Chú Tiểu & Sư Trụ Trì Chibi)
+      // 3. Vẽ Người Chơi
       Object.values(players).forEach(p => {
         ctx.save();
         ctx.translate(p.x, p.y);
 
         if (p.role === 'abbot') {
-          // Hào Quang Vàng Phật Sáng Rực Rỡ
           let gradHaoQuang = ctx.createRadialGradient(0, -5, 5, 0, -5, 50);
           gradHaoQuang.addColorStop(0, 'rgba(253, 224, 71, 0.85)');
           gradHaoQuang.addColorStop(1, 'rgba(253, 224, 71, 0)');
@@ -305,44 +231,37 @@
           ctx.arc(0, -5, 50, 0, Math.PI * 2);
           ctx.fill();
 
-          // Thân áo Cà Sa
           ctx.fillStyle = '#d97706';
           ctx.beginPath();
           ctx.arc(0, 12, 19, 0, Math.PI * 2);
           ctx.fill();
 
-          // Đầu Chibi Sư Trụ Trì
           ctx.fillStyle = '#fef08a';
           ctx.beginPath();
           ctx.arc(0, -10, 16, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Chú Tiểu Chibi Dễ Thương Chi Tiết
           ctx.fillStyle = '#78350f';
           ctx.beginPath();
           ctx.arc(0, 10, 16, 0, Math.PI * 2);
           ctx.fill();
 
-          // Đầu Chibi
           ctx.fillStyle = '#fef08a';
           ctx.beginPath();
           ctx.arc(0, -10, 15, 0, Math.PI * 2);
           ctx.fill();
 
-          // Má Hồng Đáng Yêu
           ctx.fillStyle = 'rgba(244, 63, 94, 0.55)';
           ctx.beginPath();
           ctx.arc(-6, -6, 3.5, 0, Math.PI * 2);
           ctx.arc(6, -6, 3.5, 0, Math.PI * 2);
           ctx.fill();
 
-          // Nón lá đằng sau lưng
           ctx.fillStyle = '#d97706';
           ctx.beginPath();
           ctx.arc(p.facing === 'left' ? 11 : -11, -7, 12, 0, Math.PI * 2);
           ctx.fill();
 
-          // Chổi Tre Quét Lá
           ctx.strokeStyle = '#92400e';
           ctx.lineWidth = 4;
           ctx.beginPath();
@@ -351,7 +270,6 @@
           ctx.stroke();
         }
 
-        // Tên Pháp Danh & Phước Đức
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 13px sans-serif';
         ctx.textAlign = 'center';
@@ -361,38 +279,6 @@
         ctx.shadowBlur = 0;
         ctx.restore();
       });
-    }
-
-    function drawLantern(x, y) {
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(x - 10, y, 20, 24);
-      ctx.fillStyle = '#fde047';
-      ctx.fillRect(x - 4, y - 6, 8, 6);
-      ctx.strokeStyle = '#7f1d1d';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x - 10, y, 20, 24);
-    }
-
-    function drawAncientBanyan(x, y) {
-      ctx.fillStyle = '#291405';
-      ctx.fillRect(x - 22, y + 25, 44, 110);
-      ctx.fillStyle = '#14532d';
-      ctx.beginPath();
-      ctx.arc(x, y, 75, 0, Math.PI * 2);
-      ctx.arc(x - 45, y + 40, 55, 0, Math.PI * 2);
-      ctx.arc(x + 45, y + 40, 55, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    function drawLotus(x, y) {
-      ctx.fillStyle = '#f472b6';
-      ctx.beginPath();
-      ctx.arc(x, y, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fde047';
-      ctx.beginPath();
-      ctx.arc(x, y, 3.5, 0, Math.PI * 2);
-      ctx.fill();
     }
 
     function setupJoystick() {

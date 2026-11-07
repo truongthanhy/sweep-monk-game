@@ -10,25 +10,39 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// File Database giả lập đơn giản
+// File Database lưu trữ điểm và số lá đã quét vĩnh viễn
 const DB_FILE = path.join(__dirname, 'database.json');
-function loadDatabase() { try { if (fs.existsSync(DB_FILE)) return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch (e) {} return {}; }
-function saveDatabase(db) { try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (e) {} }
 
-let userDB = loadDatabase();
-const gameState = { players: {}, abbotId: null, blessingActive: false, chatMessages: [] };
-
-// Hàm tính cấp bậc & trang phục dựa trên tổng Phước Đức
-function getTitleData(merit) {
-  if (merit >= 500) return { title: '🧘‍♂️ Sư Thầy Thâm Viễn', outfit: 'saffron', points: 20 }; // Thăng cấp
-  return { title: '👶 Chú Tiểu Tập Sự', outfit: 'brown', points: 10 }; // Mặc định
+function loadDatabase() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    }
+  } catch (e) { console.error(e); }
+  return {};
 }
 
+function saveDatabase(db) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  } catch (e) { console.error(e); }
+}
+
+let userDB = loadDatabase();
+const gameState = { players: {}, blessingActive: false, chatMessages: [] };
+
+// Hàm phân cấp bậc & trang phục dựa trên tổng Phước Đức
+function getTitleData(merit) {
+  if (merit >= 500) return { title: '🧘‍♂️ Sư Thầy Thâm Viễn', outfit: 'saffron', points: 20 };
+  return { title: '👶 Chú Tiểu Tập Sự', outfit: 'brown', points: 10 };
+}
+
+// Tạo lá rơi CHỈ ở phần sân phía dưới (nửa dưới màn hình)
 function createRandomLeaf() {
   return {
     id: Math.random().toString(36).substr(2, 9),
     x: 180 + Math.random() * 840,
-    y: 300 + Math.random() * 320, // CHỈ xuất hiện phần sân dưới
+    y: 340 + Math.random() * 300, 
     rotation: Math.random() * Math.PI * 2,
     scale: 0.8 + Math.random() * 0.4
   };
@@ -38,35 +52,43 @@ io.on('connection', (socket) => {
   console.log(`[+] Kết nối: ${socket.id}`);
 
   socket.on('joinGame', (data) => {
-    let name = data.name || 'Chú Tiểu';
-    
-    if (!userDB[name]) userDB[name] = { merit: 0, sweeps: 0 };
-    let rankData = getTitleData(userDB[name].merit);
+    try {
+      let name = (data && data.name) ? data.name.trim() : 'Chú Tiểu';
+      if (!name) name = 'Chú Tiểu';
+      
+      if (!userDB[name]) {
+        userDB[name] = { merit: 0, sweeps: 0 };
+      }
 
-    const initialLeaves = [];
-    for (let i = 0; i < 20; i++) initialLeaves.push(createRandomLeaf());
+      let rankData = getTitleData(userDB[name].merit);
 
-    gameState.players[socket.id] = {
-      id: socket.id,
-      name: name,
-      title: rankData.title,
-      outfit: rankData. outfit, // Brown or Saffron
-      x: 300 + Math.random() * 600,
-      y: 400 + Math.random() * 200,
-      merit: userDB[name].merit,
-      sweeps: userDB[name].sweeps,
-      facing: 'right',
-      leaves: initialLeaves
-    };
+      const initialLeaves = [];
+      for (let i = 0; i < 20; i++) initialLeaves.push(createRandomLeaf());
 
-    socket.emit('initGameState', {
-      playerId: socket.id,
-      players: gameState.players,
-      blessingActive: gameState.blessingActive,
-      chatMessages: gameState.chatMessages // Gửi 50 tin nhắn chat gần nhất
-    });
+      gameState.players[socket.id] = {
+        id: socket.id,
+        name: name,
+        title: rankData.title,
+        outfit: rankData.outfit,
+        x: 300 + Math.random() * 600,
+        y: 450 + Math.random() * 150,
+        merit: userDB[name].merit,
+        sweeps: userDB[name].sweeps,
+        facing: 'right',
+        leaves: initialLeaves
+      };
 
-    socket.broadcast.emit('playerJoined', gameState.players[socket.id]);
+      socket.emit('initGameState', {
+        playerId: socket.id,
+        players: gameState.players,
+        blessingActive: gameState.blessingActive,
+        chatMessages: gameState.chatMessages || []
+      });
+
+      socket.broadcast.emit('playerJoined', gameState.players[socket.id]);
+    } catch (err) {
+      console.error("Lỗi khi joinGame:", err);
+    }
   });
 
   socket.on('playerMove', (pos) => {
@@ -87,19 +109,18 @@ io.on('connection', (socket) => {
         p.leaves.splice(leafIndex, 1);
         
         let rankData = getTitleData(p.merit);
-        const basePoints = rankData.points;
-        const points = gameState.blessingActive ? basePoints * 2 : basePoints;
+        const points = gameState.blessingActive ? rankData.points * 2 : rankData.points;
         
         p.merit += points;
         p.sweeps += 1;
         p.leaves.push(createRandomLeaf());
 
-        // Kiểm tra và thăng cấp tự động
+        // Kiểm tra thăng cấp tự động
         rankData = getTitleData(p.merit);
         p.title = rankData.title;
         p.outfit = rankData.outfit;
 
-        // Lưu Database
+        // Lưu vào Database
         if (userDB[p.name]) {
           userDB[p.name].merit = p.merit;
           userDB[p.name].sweeps = p.sweeps;
@@ -107,19 +128,24 @@ io.on('connection', (socket) => {
         }
 
         io.emit('updatePlayerScore', {
-          playerId: socket.id, merit: p.merit, sweeps: p.sweeps, title: p.title, outfit: p.outfit, leaves: p.leaves
+          playerId: socket.id,
+          merit: p.merit,
+          sweeps: p.sweeps,
+          title: p.title,
+          outfit: p.outfit,
+          leaves: p.leaves
         });
       }
     }
   });
 
-  // Xử lý gửi tin nhắn Chat
+  // Xử lý Chat toàn tự
   socket.on('sendChatMessage', (msg) => {
     const p = gameState.players[socket.id];
-    if (p && msg.trim()) {
+    if (p && msg && msg.trim()) {
       const chatMsg = { name: p.name, msg: msg.trim().substring(0, 100), time: Date.now() };
       gameState.chatMessages.push(chatMsg);
-      if (gameState.chatMessages.length > 50) gameState.chatMessages.shift(); // Chỉ giữ 50 tin nhắn gần nhất
+      if (gameState.chatMessages.length > 50) gameState.chatMessages.shift();
       io.emit('newChatMessage', chatMsg);
     }
   });

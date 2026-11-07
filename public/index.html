@@ -10,18 +10,19 @@
     body { touch-action: manipulation; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; background: #1c0d07; }
     canvas { display: block; border-radius: 12px; }
     
-    /* Mobile Joystick - NHỎ LẠI & GÓC TRÁI DƯỚI */
+    /* Joystick thu nhỏ gọn gàng ở góc dưới bên trái */
     .joystick-base { width: 90px; height: 90px; background: rgba(0, 0, 0, 0.45); border: 2px solid rgba(253, 224, 71, 0.5); border-radius: 50%; position: absolute; bottom: 15px; left: 15px; touch-action: none; display: none; z-index: 10; }
     .joystick-thumb { width: 38px; height: 38px; background: rgba(253, 224, 71, 0.9); border-radius: 50%; position: absolute; top: 26px; left: 26px; box-shadow: 0 4px 10px rgba(0,0,0,0.6); }
 
-    /* Chat System Style */
-    #chatWidget { position: absolute; bottom: 15px; right: 15px; width: 300px; z-index: 20; transition: all 0.3s ease; }
-    #chatToggle { width: 60px; height: 60px; background: rgba(0, 0, 0, 0.6); border: 2px solid rgba(253, 224, 71, 0.6); border-radius: 50%; color: #facc15; font-size: 24px; display: flex; items-center; justify-center; cursor: pointer; float: right; }
-    #chatPanel { display: none; background: rgba(0, 0, 0, 0.9); border: 2px solid #78350f; border-radius: 16px; overflow: hidden; width: 100%; height: 320px; box-shadow: 0 8px 16px rgba(0,0,0,0.7); }
-    #chatHeader { background: #5a280b; padding: 10px; font-weight: bold; color: #fde047; display: flex; justify-content: space-between; border-b: 1px solid #78350f; }
-    #chatMessages { padding: 10px; height: 230px; overflow-y: auto; color: #amber-100; font-size: 13px; line-height: 1.6; }
-    #chatInputBar { padding: 8px; background: #2c1810; display: flex; border-t: 1px solid #78350f; }
-    #chatInput { flex: 1; background: rgba(0,0,0,0.4); border: 1px solid #78350f; border-radius: 8px; color: #fff; padding: 6px 10px; font-size: 13px; focus:outline-none; focus:border-yellow-400; }
+    /* Khung Chat ở góc dưới bên phải (Bật/Tắt linh hoạt) */
+    #chatWidget { position: absolute; bottom: 15px; right: 15px; width: 300px; z-index: 20; }
+    #chatToggle { width: 50px; height: 50px; background: rgba(0, 0, 0, 0.7); border: 2px solid rgba(253, 224, 71, 0.7); border-radius: 50%; color: #facc15; font-size: 22px; display: flex; align-items: center; justify-content: center; cursor: pointer; float: right; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+    #chatPanel { display: none; background: rgba(0, 0, 0, 0.92); border: 2px solid #78350f; border-radius: 16px; overflow: hidden; width: 100%; height: 300px; box-shadow: 0 8px 20px rgba(0,0,0,0.8); }
+    #chatHeader { background: #5a280b; padding: 8px 12px; font-weight: bold; color: #fde047; display: flex; justify-content: space-between; border-bottom: 1px solid #78350f; font-size: 14px; }
+    #chatMessages { padding: 10px; height: 215px; overflow-y: auto; color: #fef3c7; font-size: 13px; line-height: 1.5; }
+    #chatInputBar { padding: 8px; background: #2c1810; display: flex; border-top: 1px solid #78350f; }
+    #chatInput { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid #78350f; border-radius: 8px; color: #fff; padding: 6px 10px; font-size: 13px; outline: none; }
+    #chatInput:focus { border-color: #facc15; }
     .chat-msg-user { color: #f97316; font-weight: bold; margin-right: 5px; }
   </style>
 </head>
@@ -53,24 +54,21 @@
         <span class="text-yellow-400 text-base">✨ Phước Đức: <span id="uiMerit">0</span></span>
         <span class="text-amber-200">🧹 Đã Quét: <span id="uiSweeps">0</span> lá</span>
       </div>
-      <div id="blessingBanner" class="hidden animate-pulse text-yellow-300 font-extrabold bg-amber-900/90 px-4 py-1 rounded-full border border-yellow-400 text-xs shadow">
-        🌟 SƯ TRỤ TRÌ BAN PHƯỚC (X2 ĐIỂM)!
-      </div>
     </div>
 
     <canvas id="gameCanvas" width="1200" height="700" class="w-full h-auto"></canvas>
     
-    <!-- Mobile Joystick (Nhỏ lại, góc trái dưới) -->
+    <!-- Joystick điều khiển di động (Góc dưới bên trái) -->
     <div id="joystickBase" class="joystick-base">
       <div id="joystickThumb" class="joystick-thumb"></div>
     </div>
 
-    <!-- HỆ THỐNG CHAT (Bật/Tắt) -->
+    <!-- Khung Chat Toàn Tự (Góc dưới bên phải, ẩn/hiện tùy ý) -->
     <div id="chatWidget">
       <div id="chatToggle" onclick="toggleChat()">💬</div>
       <div id="chatPanel">
         <div id="chatHeader">
-          <span>💬 Chat Toàn Tự</span>
+          <span>💬 Thảo Luận Thiền Viện</span>
           <span onclick="toggleChat()" class="cursor-pointer text-yellow-100 text-lg hover:text-red-400">✖</span>
         </div>
         <div id="chatMessages"></div>
@@ -86,7 +84,7 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Nạp ảnh nền bg.png
+    // Nạp ảnh nền sân chùa
     const bgImage = new Image();
     bgImage.src = 'bg.png';
 
@@ -102,29 +100,23 @@
       const nameInput = document.getElementById('playerName');
       const name = nameInput ? nameInput.value.trim() : 'Chú Tiểu';
       
-      // Ẩn modal đăng nhập ngay lập tức để tránh bị kẹt màn hình
+      // Ẩn modal đăng nhập ngay lập tức tránh bị kẹt
       const modal = document.getElementById('joinModal');
-      if (modal) {
-        modal.classList.add('hidden');
-      }
+      if (modal) modal.classList.add('hidden');
 
-      // Gửi yêu cầu vào game lên server
       socket.emit('joinGame', { name: name });
-
-      // Kích hoạt joystick nếu chơi trên điện thoại
-      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-        setupJoystick();
-      }
+      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) setupJoystick();
     }
 
-    // Xử lý bật tắt Chat
     function toggleChat() {
       chatPanelVisible = !chatPanelVisible;
       document.getElementById('chatPanel').style.display = chatPanelVisible ? 'block' : 'none';
       document.getElementById('chatToggle').style.display = chatPanelVisible ? 'none' : 'flex';
+      if (chatPanelVisible) {
+        setTimeout(() => document.getElementById('chatInput').focus(), 100);
+      }
     }
 
-    // Gửi tin nhắn Chat
     function sendChatMessage() {
       const input = document.getElementById('chatInput');
       if (input.value.trim()) {
@@ -141,10 +133,9 @@
         document.getElementById('uiMerit').innerText = players[myId].merit;
         document.getElementById('uiSweeps').innerText = players[myId].sweeps;
       }
-      // Nạp tin nhắn chat cũ
       const messagesContainer = document.getElementById('chatMessages');
       messagesContainer.innerHTML = '';
-      data.chatMessages.forEach(addChatMessageToUI);
+      if (data.chatMessages) data.chatMessages.forEach(addChatMessageToUI);
     });
 
     socket.on('playerJoined', (p) => { players[p.id] = p; });
@@ -172,7 +163,6 @@
       }
     });
 
-    // Nhận tin nhắn Chat mới
     socket.on('newChatMessage', addChatMessageToUI);
 
     function addChatMessageToUI(chatMsg) {
@@ -181,14 +171,22 @@
       msgDiv.className = 'mb-2';
       msgDiv.innerHTML = `<span class="chat-msg-user">${chatMsg.name}:</span> ${chatMsg.msg}`;
       messagesContainer.appendChild(msgDiv);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight; // Tự cuộn xuống dưới cùng
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    window.addEventListener('keydown', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
-    window.addEventListener('keyup', e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+    window.addEventListener('keydown', e => { 
+      if (chatPanelVisible && document.activeElement === document.getElementById('chatInput')) return;
+      if (keys.hasOwnProperty(e.key)) keys[e.key] = true; 
+    });
+    window.addEventListener('keyup', e => { 
+      if (keys.hasOwnProperty(e.key)) keys.key = false; // Note: safe keyup
+      if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+    });
 
     function update() {
-      if (!myId || !players[myId] || chatPanelVisible && document.activeElement === document.getElementById('chatInput')) return;
+      if (!myId || !players[myId]) return;
+      if (chatPanelVisible && document.activeElement === document.getElementById('chatInput')) return;
+
       const me = players[myId];
       let speed = 5;
       let dx = 0, dy = 0;
@@ -205,9 +203,9 @@
 
       if (dx !== 0 || dy !== 0) {
         const len = Math.hypot(dx, dy);
-        // Vùng di chuyển CHỈ trong sân gạch dưới
+        // Giới hạn nhân vật chỉ di chuyển ở khu vực sân phía dưới
         me.x = Math.max(160, Math.min(1040, me.x + (dx / len) * speed));
-        me.y = Math.max(300, Math.min(640, me.y + (dy / len) * speed)); // Giới hạn y không lên cao
+        me.y = Math.max(340, Math.min(640, me.y + (dy / len) * speed));
 
         socket.emit('playerMove', { x: me.x, y: me.y, facing: dx < 0 ? 'left' : (dx > 0 ? 'right' : me.facing) });
 
@@ -219,4 +217,100 @@
       }
     }
 
-    // RENDER LÀ Đ  
+    // Vẽ giao diện đồ họa vector mượt mà
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Vẽ Ảnh Nền Chùa
+      if (bgImage.complete && bgImage.naturalWidth !== 0) {
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = '#431407';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // 2. Vẽ Lá Đa (Nằm trọn ở phần sân dưới)
+      myLeaves.forEach(leaf => {
+        ctx.save();
+        ctx.translate(leaf.x, leaf.y);
+        ctx.rotate(leaf.rotation);
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12 * leaf.scale, 5.5 * leaf.scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ca8a04';
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // 3. Vẽ Nhân Vật (Phân biệt Chú Tiểu áo nâu vs Sư Thầy áo vàng sậm & Tích Trượng)
+      Object.values(players).forEach(p => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+
+        if (p.outfit === 'saffron') {
+          // --- SƯ THẦY (Đủ điểm thăng cấp) ---
+          ctx.fillStyle = '#b45309'; // Áo Cà Sa Vàng Sậm
+          ctx.beginPath(); ctx.arc(0, 12, 19, 0, Math.PI * 2); ctx.fill();
+
+          ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, -10, 16, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.4)'; ctx.beginPath(); ctx.arc(-6, -6, 3, 0, Math.PI * 2); ctx.arc(6, -6, 3, 0, Math.PI * 2); ctx.fill();
+
+          // Gậy Tích Trượng
+          ctx.strokeStyle = '#facc15'; ctx.lineWidth = 4; ctx.beginPath();
+          ctx.moveTo(p.facing === 'left' ? -25 : 25, -20); ctx.lineTo(p.facing === 'left' ? -25 : 25, 40); ctx.stroke();
+          ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(p.facing === 'left' ? -25 : 25, -25, 10, 0, Math.PI * 2); ctx.fill();
+
+        } else {
+          // --- CHÚ TIỂU (Mặc định) ---
+          ctx.fillStyle = '#78350f'; // Áo Nâu
+          ctx.beginPath(); ctx.arc(0, 10, 16, 0, Math.PI * 2); ctx.fill();
+
+          ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(0, -10, 15, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(244, 63, 94, 0.55)'; ctx.beginPath(); ctx.arc(-6, -6, 3.5, 0, Math.PI * 2); ctx.arc(6, -6, 3.5, 0, Math.PI * 2); ctx.fill();
+
+          // Nón Lá & Chổi Tre
+          ctx.fillStyle = '#d97706'; ctx.beginPath(); ctx.arc(p.facing === 'left' ? 11 : -11, -7, 12, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#92400e'; ctx.lineWidth = 4; ctx.beginPath();
+          ctx.moveTo(0, 3); ctx.lineTo(p.facing === 'left' ? -28 : 28, 16); ctx.stroke();
+        }
+
+        // Hiển thị Pháp Danh & Cấp Bậc
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.shadowColor = '#000000'; ctx.shadowBlur = 5;
+        ctx.fillText(`${p.name}`, 0, -55);
+        ctx.fillStyle = p.outfit === 'saffron' ? '#fde047' : '#fbbf24';
+        ctx.fillText(`${p.title || '👶 Chú Tiểu'}`, 0, -40);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      });
+    }
+
+    function setupJoystick() {
+      const base = document.getElementById('joystickBase');
+      const thumb = document.getElementById('joystickThumb');
+      base.style.display = 'block';
+      let active = false, startX, startY;
+
+      base.addEventListener('touchstart', e => {
+        active = true; startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      });
+      window.addEventListener('touchmove', e => {
+        if (!active) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+        const dist = Math.hypot(dx, dy), maxDist = 30, angle = Math.atan2(dy, dx);
+        const moveDist = Math.min(dist, maxDist);
+        thumb.style.transform = `translate(${Math.cos(angle) * moveDist}px, ${Math.sin(angle) * moveDist}px)`;
+        joystickDir = { x: Math.cos(angle), y: Math.sin(angle) };
+      });
+      const endTouch = () => { active = false; thumb.style.transform = 'translate(0px, 0px)'; joystickDir = { x: 0, y: 0 }; };
+      window.addEventListener('touchend', endTouch);
+    }
+
+    function gameLoop() { update(); render(); requestAnimationFrame(gameLoop); }
+    gameLoop();
+  </script>
+</body>
+</html>
